@@ -47,3 +47,11 @@ async def delete_filter(keyword):
 # Delete all filters
 async def delete_all_filters():
     await filters_col.delete_many({})
+
+# Fuzzy search filters by keyword (for series fallback check)
+async def search_filters_fuzzy(keyword):
+    keyword = keyword.strip().lower()
+    cursor = filters_col.find({
+        "keyword": {"$regex": keyword, "$options": "i"}
+    })
+    return await cursor.to_list(length=10)

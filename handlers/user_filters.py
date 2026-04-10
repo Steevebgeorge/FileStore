@@ -2,15 +2,38 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 from utils.db import get_filter
 from utils.buttons import build_keyboard
+from utils.series_db import search_series
+from handlers.series import send_series_card
 
 
 # ✅ Code for showing global filter to users
 def register_user_filter(app: Client):
     @app.on_message(filters.text & filters.private & ~filters.command("start"))
-    async def user_filter_handler(_, message: Message):
+    async def user_filter_handler(client, message: Message):
         keyword = message.text.strip().lower()
-        data = await get_filter(keyword)
+        series_results = await search_series(keyword)
+        if series_results:
+            bot_me = await client.get_me()
+            if len(series_results) == 1:
+                # Only one match — show it directly
+                await send_series_card(message, series_results[0], bot_me.username)
+            else:
+                # Multiple matches — list them with buttons to pick
+                from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+                buttons = []
+                for s in series_results:
+                    buttons.append([InlineKeyboardButton(
+                        text=s["title"],
+                        callback_data=f"showseries:{s['title_lower']}"
+                    )])
+                await message.reply_text(
+                    "<b>🔍 Multiple results found:</b>",
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+            return
+        # ── Fall through to normal filters ───────────────────────────────
 
+        data = await get_filter(keyword)
         if not data:
             return
 
