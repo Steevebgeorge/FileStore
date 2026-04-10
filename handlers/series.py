@@ -123,7 +123,6 @@ def register_series(app: Client):
         for i in range(1, season_count + 1):
             season_name = f"S{i}"
 
-            # Ask qualities for this season
             await message.reply_text(
                 f"📂 <b>{season_name}</b> — What qualities are available?\n\n"
                 f"Send them comma-separated, e.g. <code>720p, 1080p, 2160p</code>"
@@ -143,7 +142,6 @@ def register_series(app: Client):
 
             seasons_data[season_name] = season_links
 
-        # Save everything
         await save_series(title, poster_file_id, description, seasons_data)
         await message.reply_text(
             f"✅ <b>{title}</b> has been saved successfully!\n\n"
@@ -179,18 +177,28 @@ def register_series(app: Client):
             await message.reply_text("❌ Series not found.")
 
     # ── Callback: season button tapped ──────────────────────────────────────────
-    @app.on_callback_query(filters.regex(r"^season:(.+):(.+)$"))
+    @app.on_callback_query(filters.regex(r"^season:"))
     async def season_callback(client, query: CallbackQuery):
+        print(f"[DEBUG] season_callback triggered: {query.data}")
         data = query.data
         parts = data.split(":", 2)
+
+        if len(parts) < 3:
+            print(f"[DEBUG] not enough parts: {parts}")
+            return await query.answer("❌ Invalid data.", show_alert=True)
+
         title_lower = parts[1]
         season = parts[2]
+        print(f"[DEBUG] title_lower={title_lower}, season={season}")
 
         series = await get_series_by_title(title_lower)
         if not series:
+            print(f"[DEBUG] series not found for title_lower={title_lower}")
             return await query.answer("❌ Series not found.", show_alert=True)
 
         qualities = series["seasons"].get(season, {})
+        print(f"[DEBUG] qualities={qualities}")
+
         if not qualities:
             return await query.answer("❌ No qualities found for this season.", show_alert=True)
 
@@ -199,24 +207,23 @@ def register_series(app: Client):
         new_caption = f"<b>🎬 {series['title']} — {season}</b>\n\n<b>Select quality:</b>"
 
         try:
-            # Message has a photo with caption
             await query.message.edit_caption(
                 caption=new_caption,
                 reply_markup=keyboard
             )
-        except Exception:
+            print("[DEBUG] edit_caption succeeded")
+        except Exception as e1:
+            print(f"[DEBUG] edit_caption failed: {e1}")
             try:
-                # Message is plain text (no photo)
                 await query.message.edit_text(
                     text=new_caption,
                     reply_markup=keyboard
                 )
-            except Exception:
-                # Last resort — send a new message
-                await query.message.reply_text(
-                    new_caption,
-                    reply_markup=keyboard
-                )
+                print("[DEBUG] edit_text succeeded")
+            except Exception as e2:
+                print(f"[DEBUG] edit_text failed: {e2}")
+                await query.message.reply_text(new_caption, reply_markup=keyboard)
+                print("[DEBUG] reply_text sent as fallback")
 
         await query.answer()
 
