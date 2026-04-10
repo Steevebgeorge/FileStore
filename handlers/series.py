@@ -196,11 +196,28 @@ def register_series(app: Client):
 
         bot_username = (await client.get_me()).username
         keyboard = quality_keyboard(qualities, title_lower, season, bot_username)
+        new_caption = f"<b>🎬 {series['title']} — {season}</b>\n\n<b>Select quality:</b>"
 
-        await query.message.edit_caption(
-            caption=f"<b>🎬 {series['title']} — {season}</b>\n\n<b>Select quality:</b>",
-            reply_markup=keyboard
-        )
+        try:
+            # Message has a photo with caption
+            await query.message.edit_caption(
+                caption=new_caption,
+                reply_markup=keyboard
+            )
+        except Exception:
+            try:
+                # Message is plain text (no photo)
+                await query.message.edit_text(
+                    text=new_caption,
+                    reply_markup=keyboard
+                )
+            except Exception:
+                # Last resort — send a new message
+                await query.message.reply_text(
+                    new_caption,
+                    reply_markup=keyboard
+                )
+
         await query.answer()
 
     # ── Callback: multiple results — user picks a series ────────────────────────
