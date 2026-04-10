@@ -23,7 +23,7 @@ def seasons_keyboard(seasons: dict, title_lower: str):
             text=season,
             callback_data=f"season:{title_lower}:{season}"
         ))
-        if len(row) == 4:          # max 4 buttons per row
+        if len(row) == 4:
             buttons.append(row)
             row = []
     if row:
@@ -134,7 +134,7 @@ def register_series(app: Client):
             season_links = {}
             for quality in qualities:
                 await message.reply_text(
-                    f"🔗 Send the <b>File ID or deep link</b> for <b>{season_name} — {quality}</b>\n\n"
+                    f"🔗 Send the <b>File ID</b> for <b>{season_name} — {quality}</b>\n\n"
                     f"This is the file ID you get from /genlink or /batch.\n"
                     f"Example: <code>BQACAgUAAxkBAAI...</code>"
                 )
@@ -174,14 +174,14 @@ def register_series(app: Client):
         title_lower = parts[1].strip().lower()
         deleted = await delete_series(title_lower)
         if deleted:
-            await message.reply_text(f"✅ Series deleted.")
+            await message.reply_text("✅ Series deleted.")
         else:
-            await message.reply_text(f"❌ Series not found.")
+            await message.reply_text("❌ Series not found.")
 
     # ── Callback: season button tapped ──────────────────────────────────────────
     @app.on_callback_query(filters.regex(r"^season:(.+):(.+)$"))
-    async def season_callback(_, query: CallbackQuery):
-        data = query.data  # "season:game of thrones:S2"
+    async def season_callback(client, query: CallbackQuery):
+        data = query.data
         parts = data.split(":", 2)
         title_lower = parts[1]
         season = parts[2]
@@ -194,7 +194,7 @@ def register_series(app: Client):
         if not qualities:
             return await query.answer("❌ No qualities found for this season.", show_alert=True)
 
-        bot_username = (await _.get_me()).username
+        bot_username = (await client.get_me()).username
         keyboard = quality_keyboard(qualities, title_lower, season, bot_username)
 
         await query.message.edit_caption(
@@ -203,5 +203,13 @@ def register_series(app: Client):
         )
         await query.answer()
 
-    # ── User search: handled in user_filters.py, but series search exposed here ─
-    # (see user_filters.py edit in Step 4 below)
+    # ── Callback: multiple results — user picks a series ────────────────────────
+    @app.on_callback_query(filters.regex(r"^showseries:(.+)$"))
+    async def showseries_callback(client, query: CallbackQuery):
+        title_lower = query.data.split(":", 1)[1]
+        series = await get_series_by_title(title_lower)
+        if not series:
+            return await query.answer("❌ Not found.", show_alert=True)
+        bot_me = await client.get_me()
+        await send_series_card(query.message, series, bot_me.username)
+        await query.answer()
