@@ -30,21 +30,25 @@ def seasons_keyboard(seasons: dict, title_lower: str):
         buttons.append(row)
     return InlineKeyboardMarkup(buttons)
 
-def quality_keyboard(qualities: dict, title_lower: str, season: str, bot_username: str):
-    """Build inline keyboard of quality buttons with deep links."""
+def quality_keyboard(qualities: dict, title_lower: str, season: str):
+    """Build inline keyboard of quality buttons — uses the link exactly as saved."""
     buttons = []
     row = []
-    for quality, file_id in qualities.items():
-        deep_link = f"https://t.me/{bot_username}?start={file_id}"
+    for quality, link in qualities.items():
         row.append(InlineKeyboardButton(
             text=quality,
-            url=deep_link
+            url=link          # ← use the link exactly as stored, no prefix added
         ))
         if len(row) == 3:
             buttons.append(row)
             row = []
     if row:
         buttons.append(row)
+    # Back button — returns to season selection
+    buttons.append([InlineKeyboardButton(
+        text="⬅️ Back",
+        callback_data=f"backtoseasons:{title_lower}"
+    )])
     return InlineKeyboardMarkup(buttons)
 
 # ─── Send series card to user ───────────────────────────────────────────────────
@@ -133,9 +137,9 @@ def register_series(app: Client):
             season_links = {}
             for quality in qualities:
                 await message.reply_text(
-                    f"🔗 Send the <b>File ID</b> for <b>{season_name} — {quality}</b>\n\n"
-                    f"This is the file ID you get from /genlink or /batch.\n"
-                    f"Example: <code>BQACAgUAAxkBAAI...</code>"
+                    f"🔗 Send the <b>full link</b> for <b>{season_name} — {quality}</b>\n\n"
+                    f"Paste the complete link exactly as it is.\n"
+                    f"Example: <code>https://t.me/Cinemacompanyfilebot?start=Z2V0LTEy...</code>"
                 )
                 link_msg = await app.listen(message.chat.id)
                 season_links[quality] = link_msg.text.strip()
@@ -179,31 +183,24 @@ def register_series(app: Client):
     # ── Callback: season button tapped ──────────────────────────────────────────
     @app.on_callback_query(filters.regex(r"^season:"))
     async def season_callback(client, query: CallbackQuery):
-        print(f"[DEBUG] season_callback triggered: {query.data}")
         data = query.data
         parts = data.split(":", 2)
 
         if len(parts) < 3:
-            print(f"[DEBUG] not enough parts: {parts}")
             return await query.answer("❌ Invalid data.", show_alert=True)
 
         title_lower = parts[1]
         season = parts[2]
-        print(f"[DEBUG] title_lower={title_lower}, season={season}")
 
         series = await get_series_by_title(title_lower)
         if not series:
-            print(f"[DEBUG] series not found for title_lower={title_lower}")
             return await query.answer("❌ Series not found.", show_alert=True)
 
         qualities = series["seasons"].get(season, {})
-        print(f"[DEBUG] qualities={qualities}")
-
         if not qualities:
             return await query.answer("❌ No qualities found for this season.", show_alert=True)
 
-        bot_username = (await client.get_me()).username
-        keyboard = quality_keyboard(qualities, title_lower, season, bot_username)
+        keyboard = quality_keyboard(qualities, title_lower, season)
         new_caption = f"<b>🎬 {series['title']} — {season}</b>\n\n<b>Select quality:</b>"
 
         try:
@@ -211,19 +208,45 @@ def register_series(app: Client):
                 caption=new_caption,
                 reply_markup=keyboard
             )
-            print("[DEBUG] edit_caption succeeded")
-        except Exception as e1:
-            print(f"[DEBUG] edit_caption failed: {e1}")
+        except Exception:
             try:
                 await query.message.edit_text(
                     text=new_caption,
                     reply_markup=keyboard
                 )
-                print("[DEBUG] edit_text succeeded")
-            except Exception as e2:
-                print(f"[DEBUG] edit_text failed: {e2}")
+            except Exception:
                 await query.message.reply_text(new_caption, reply_markup=keyboard)
-                print("[DEBUG] reply_text sent as fallback")
+
+        await query.answer()
+
+    # ── Callback: back button — return to season selection ──────────────────────
+    @app.on_callback_query(filters.regex(r"^backtoseasons:"))
+    async def backtoseasons_callback(client, query: CallbackQuery):
+        title_lower = query.data.split(":", 1)[1]
+
+        series = await get_series_by_title(title_lower)
+        if not series:
+            return await query.answer("❌ Series not found.", show_alert=True)
+
+        keyboard = seasons_keyboard(series["seasons"], title_lower)
+        caption = f"<b>🎬 {series['title']}</b>"
+        if series.get("description"):
+            caption += f"\n\n<i>{series['description']}</i>"
+        caption += "\n\n<b>Select a season:</b>"
+
+        try:
+            await query.message.edit_caption(
+                caption=caption,
+                reply_markup=keyboard
+            )
+        except Exception:
+            try:
+                await query.message.edit_text(
+                    text=caption,
+                    reply_markup=keyboard
+                )
+            except Exception:
+                await query.message.reply_text(caption, reply_markup=keyboard)
 
         await query.answer()
 
