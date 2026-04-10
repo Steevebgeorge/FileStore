@@ -25,8 +25,8 @@ class Bot(Client):
             name="Bot",
             api_hash=API_HASH,
             api_id=APP_ID,
-            # plugins={"root": "plugins"},
-            plugins={"root": "plugins", "exclude": ["start"]},
+            plugins={"root": "plugins"},
+            # plugins={"root": "plugins", "exclude": ["start"]},
             workers=TG_BOT_WORKERS,
             bot_token=TG_BOT_TOKEN
         )
