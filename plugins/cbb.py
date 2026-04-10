@@ -1,19 +1,10 @@
-#
-# Copyright (C) 2025 by Codeflix-Bots@Github, < https://github.com/Codeflix-Bots >.
-#
-# This file is part of < https://github.com/Codeflix-Bots/FileStore > project,
-# and is released under the MIT License.
-# Please see < https://github.com/Codeflix-Bots/FileStore/blob/master/LICENSE >
-#
-# All rights reserved.
-
-from pyrogram import Client 
+from pyrogram import Client, filters
 from bot import Bot
 from config import *
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from database.database import *
 
-@Bot.on_callback_query()
+@Bot.on_callback_query(filters.regex(r"^(help|about|start|close|rfs_ch_|rfs_toggle_|fsub_back)"))
 async def cb_handler(client: Bot, query: CallbackQuery):
     data = query.data
 
@@ -73,14 +64,14 @@ async def cb_handler(client: Bot, query: CallbackQuery):
             await query.answer("Failed to fetch channel info", show_alert=True)
 
     elif data.startswith("rfs_toggle_"):
-        cid, action = data.split("_")[2:]
-        cid = int(cid)
+        parts = data.split("_")
+        cid = int(parts[2])
+        action = parts[3]
         mode = "on" if action == "on" else "off"
 
         await db.set_channel_mode(cid, mode)
         await query.answer(f"Force-Sub set to {'ON' if mode == 'on' else 'OFF'}")
 
-        # Refresh the same channel's mode view
         chat = await client.get_chat(cid)
         status = "🟢 ON" if mode == "on" else "🔴 OFF"
         new_mode = "off" if mode == "on" else "on"
