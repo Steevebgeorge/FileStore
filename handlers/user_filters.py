@@ -1,28 +1,61 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from utils.db import get_filter
 from utils.buttons import build_keyboard
 from utils.series_db import search_series
+from utils.group_db import search_groups, get_group_by_name
 from handlers.series import send_series_card
+from handlers.group import group_series_keyboard
 
 
-# ✅ Code for showing global filter to users
 def register_user_filter(app: Client):
-    @app.on_message(filters.text & filters.private & ~filters.command(
-        ["start", "addseries", "listseries", "delseries", "gfilter",
-         "viewfilters", "delfilter", "request", "addkeyword", "delkeyword"]
-    ))
+    @app.on_message(filters.text & filters.private & ~filters.command([
+        "start", "addseries", "listseries", "delseries", "editseries",
+        "addgroup", "listgroups", "delgroup", "editgroup",
+        "gfilter", "viewfilters", "delfilter", "request",
+        "addkeyword", "delkeyword"
+    ]))
     async def user_filter_handler(client, message: Message):
         keyword = message.text.strip().lower()
+
+        # ── Check groups first ───────────────────────────────────────────────────
+        group_results = await search_groups(keyword)
+        if group_results:
+            if len(group_results) == 1:
+                group = group_results[0]
+                keyboard = group_series_keyboard(group)
+                caption = f"<b>📂 {group['name']}</b>"
+                if group.get("description"):
+                    caption += f"\n\n<i>{group['description']}</i>"
+                caption += "\n\n<b>Select a series:</b>"
+                if group.get("poster_file_id"):
+                    await message.reply_photo(
+                        photo=group["poster_file_id"],
+                        caption=caption,
+                        reply_markup=keyboard
+                    )
+                else:
+                    await message.reply_text(caption, reply_markup=keyboard)
+            else:
+                buttons = []
+                for g in group_results:
+                    buttons.append([InlineKeyboardButton(
+                        text=g["name"],
+                        callback_data=f"showgroup:{g['name_lower']}"
+                    )])
+                await message.reply_text(
+                    "<b>🔍 Multiple results found:</b>",
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+            return
+
+        # ── Check individual series ──────────────────────────────────────────────
         series_results = await search_series(keyword)
         if series_results:
             bot_me = await client.get_me()
             if len(series_results) == 1:
-                # Only one match — show it directly
                 await send_series_card(message, series_results[0], bot_me.username)
             else:
-                # Multiple matches — list them with buttons to pick
-                from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
                 buttons = []
                 for s in series_results:
                     buttons.append([InlineKeyboardButton(
@@ -34,8 +67,8 @@ def register_user_filter(app: Client):
                     reply_markup=InlineKeyboardMarkup(buttons)
                 )
             return
-        # ── Fall through to normal filters ───────────────────────────────
 
+        # ── Fall through to normal filters ───────────────────────────────────────
         data = await get_filter(keyword)
         if not data:
             return
@@ -45,14 +78,11 @@ def register_user_filter(app: Client):
         buttons = build_keyboard(data.get("buttons", []))
         file_id = data.get("file_id")
 
-        # 🛡️ Protect against Telegram's [400 MESSAGE_EMPTY]
         if not caption.strip() and not file_id and not buttons:
             return await message.reply("❌ No content available for this filter.")
 
-        # 🧠 If no media and no caption, but buttons are present, use invisible char
         safe_caption = caption if caption.strip() else "‎" if buttons else None
 
-        # 📤 Send appropriate message
         if media_type == "photo":
             await message.reply_photo(photo=file_id, caption=safe_caption, reply_markup=buttons)
         elif media_type == "video":
@@ -70,3 +100,25 @@ def register_user_filter(app: Client):
         else:
             if safe_caption:
                 await message.reply_text(safe_caption, reply_markup=buttons)
+
+    # ── Callback: show a group when multiple group results ───────────────────────
+    @app.on_callback_query(filters.regex(r"^showgroup:"))
+    async def showgroup_callback(client, query):
+        name_lower = query.data.split(":", 1)[1]
+        group = await get_group_by_name(name_lower)
+        if not group:
+            return await query.answer("❌ Group not found.", show_alert=True)
+        keyboard = group_series_keyboard(group)
+        caption = f"<b>📂 {group['name']}</b>"
+        if group.get("description"):
+            caption += f"\n\n<i>{group['description']}</i>"
+        caption += "\n\n<b>Select a series:</b>"
+        if group.get("poster_file_id"):
+            await query.message.reply_photo(
+                photo=group["poster_file_id"],
+                caption=caption,
+                reply_markup=keyboard
+            )
+        else:
+            await query.message.reply_text(caption, reply_markup=keyboard)
+        await query.answer()

@@ -17,6 +17,7 @@ from handlers.delete_filter import register_delete_filter
 from handlers.request_handler import register_request_handler
 from handlers.request_callback import register_request_callback
 from handlers.series import register_series
+from handlers.group import register_group
 
 
 class Bot(Client):
@@ -60,6 +61,7 @@ class Bot(Client):
         register_request_callback(self)
         register_alert_handler(self)
         register_series(self)
+        register_group(self)
         register_user_filter(self)
 
         app = web.AppRunner(await web_server())

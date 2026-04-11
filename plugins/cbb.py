@@ -4,7 +4,7 @@ from config import *
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from database.database import *
 
-@Bot.on_callback_query(filters.regex(r"^(help|about|start|close|rfs_ch_|rfs_toggle_|fsub_back)"))
+@Bot.on_callback_query(filters.regex(r"^(help|about|start|close|rfs_ch_|rfs_toggle_|fsub_back)") & ~filters.regex(r"^(season:|backtoseasons:|showseries:|groupseries:|showgroup:)"))
 async def cb_handler(client: Bot, query: CallbackQuery):
     data = query.data
 
