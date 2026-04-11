@@ -8,7 +8,10 @@ from handlers.series import send_series_card
 
 # ✅ Code for showing global filter to users
 def register_user_filter(app: Client):
-    @app.on_message(filters.text & filters.private & ~filters.command(["start", "addseries", "listseries", "delseries", "gfilter", "viewfilters", "delfilter", "request"]))
+    @app.on_message(filters.text & filters.private & ~filters.command(
+        ["start", "addseries", "listseries", "delseries", "gfilter",
+         "viewfilters", "delfilter", "request", "addkeyword", "delkeyword"]
+    ))
     async def user_filter_handler(client, message: Message):
         keyword = message.text.strip().lower()
         series_results = await search_series(keyword)
